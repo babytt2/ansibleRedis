@@ -1,0 +1,86 @@
+# /etc/redis.conf
+- name: "[Redis] AWS Ubuntu18 apt repository setup"
+  template: src=sources_ubuntu18.list.j2 dest=/etc/apt/sources.list backup=yes owner=root group=root mode=0622
+  when: ansible_distribution_version == "18.04"
+
+- name: "[Redis] AWS Ubuntu20 apt repository setup"
+  template: src=sources_ubuntu20.list.j2 dest=/etc/apt/sources.list backup=yes owner=root group=root mode=0622
+  when: ansible_distribution_version == "20.04"
+
+- name: "[Redis] AWS apt repository update"
+  apt:
+    update_cache: yes
+
+- name: "[Redis] Install dependencies"
+  apt:
+    name: ['make', 'gcc', 'tcl', 'libssl-dev']
+
+- name: "[Redis] Ubuntu Extracted File exsits stat"
+  stat: path={{ redis_tarfile_extract_path }}/{{ redis_tarfile[redis_version] | regex_replace('.tar.gz') }}
+  register: redis_exsits
+  #when : ansible_distribution_version == "16.04"
+
+- name: "[Redis] Extract .tgz into /home/redis"
+  unarchive:
+    src: "{{ redis_tarfile_src_path }}/{{ redis_tarfile[redis_version] }}"
+    dest: "{{ redis_tarfile_extract_path }}"
+    owner: "{{ linux_user }}"
+    group: "{{ linux_user }}"
+    remote_src: no
+  when: not redis_exsits.stat.exists
+
+- name: "[Redis] Compile"
+  shell: |
+    cd "{{ redis_tarfile_extract_path }}"/"{{ redis_tarfile[redis_version] | regex_replace('.tar.gz') }}"/src
+    umask 0022 && make -j {{ ansible_processor_cores|default(1) + 1 }}
+
+- name: "[Redis] Make symlink"
+  file:
+    src: "{{ redis_tarfile_extract_path }}/{{ redis_tarfile[redis_version] | regex_replace('.tar.gz') }}"
+    dest: /home/redis/redis
+    owner: "{{ linux_user }}"
+    group: "{{ linux_user }}"
+    state: link
+
+# /etc/redis.conf
+- name: "[Redis] Deploy configuration file of redis"
+  template: src=redis_{{ redis_version }}_init.conf.j2 dest={{ redis_conf_path }}/redis.conf backup=yes owner={{ linux_user }} group={{ linux_user }} mode=0640
+
+# systemctl
+- name: "[Redis] Add systemd configuration if present"
+  template: src=redis.service.j2 dest=/lib/systemd/system/redis.service owner={{ linux_user }} group={{ linux_user }} mode=0640
+
+- name: "[Redis] Add symlink from systemd"
+  file: src=/lib/systemd/system/redis.service dest=/etc/systemd/system/multi-user.target.wants/redis.service state=link
+  notify: reload systemd
+
+- name: reload systemd
+  systemd:
+    name: "{{ redis_daemon_name }}"
+    daemon-reload: yes
+    enabled: yes
+
+# environment
+- name: "[Redis] Add another bin dir to system-wide $path"
+  lineinfile:
+    path: /etc/profile
+    line: 'PATH=$PATH:"{{ redis_link_path }}"'
+
+- name: "[Redis] source profile"
+  shell: source /etc/profile
+  args:
+    executable: /bin/bash
+
+# restart
+- name: "[Redis] systemd restart"
+  systemd: name={{ redis_daemon_name }} state=restarted
+
+- name: "[Redis] Ensure systemd is started"
+  systemd:  name={{ redis_daemon_name }} state=started
+
+- name: "[Redis] Wait 1 mins when redis is started"
+  wait_for:
+    host: "{{ item }}"
+    port: "{{ redis_conf_port }}"
+    timeout: 60
+  with_items: "{{ redis_conf_bind.split(',') | map('replace', '0.0.0.0', '127.0.0.1') | list }}"
