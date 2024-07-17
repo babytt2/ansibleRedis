@@ -1,0 +1,43 @@
+# Create User
+- name: "[Redis] Carete group"
+  group:
+    name: "{{ linux_user }}"
+    state: present
+
+- name: "[Redis] Create redis user"
+  user:
+    name: "{{ linux_user }}"
+    #password: "{{ redis_user }}"
+    group: "{{ linux_user }}"
+    shell: /bin/bash
+
+# pam_limits
+- name: "[Redis] Add nofile pam_limits for redis domain with enforcing both hard and soft types to /etc/security/limits.conf"
+  pam_limits:
+    # dest: "/etc/security/limits.conf"
+    domain: "{{ linux_user }}"
+    limit_type: "-"
+    limit_item: "nofile"
+    value: 65535
+
+- name: "[Redis] Add nproc pam_limits for redis domain with enforcing both hard and soft types to /etc/security/limits.conf"
+  pam_limits:
+    # dest: "/etc/security/limits.conf"
+    domain: "{{ linux_user }}"
+    limit_type: "-"
+    limit_item: "nproc"
+    value: 65535
+
+# Create Directory
+- name: "[Redis] create redis data directory"
+  file: path={{ redis_data_path }} owner={{ linux_user }} group={{ linux_user }} follow=yes state=directory
+
+- name: "[Redis] create backup directory"
+  file: path={{ redis_backup_path }} owner={{ linux_user }} group={{ linux_user }} follow=yes state=directory
+
+- name: "[Redis] Create log dir"
+  file: path={{ redis_log_path }} owner={{ linux_user }} group={{ linux_user }} follow=yes state=directory
+  #file: state=directory recurse=yes dest={{ redis_log_path | dirname }} owner={{ linux_user }} group={{ linux_user }} mode=0755
+
+- name: "[Redis] Create conf dir"
+  file: path={{ redis_conf_path }} owner={{ linux_user }} group={{ linux_user }} follow=yes state=directory
