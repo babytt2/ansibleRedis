@@ -1,0 +1,28 @@
+#!/bin/bash
+#==================================================================================
+# author : babytt2
+# usage  : ./split_errorlog.sh
+#==================================================================================
+# Variables
+HOSTNAME=`hostname`
+DATE=`date -d yesterday +%Y%m%d`
+LOG_DIR=/data/logs
+SPLIT_LOG_DIR=${LOG_DIR}/split_errorlog
+
+# make directory
+mkdir -p ${SPLIT_LOG_DIR}
+
+# cut a current log file out to split-log-file
+cp $LOG_DIR/${HOSTNAME}-redis.log ${SPLIT_LOG_DIR}/${DATE}-${HOSTNAME}-redis.log
+{% if is_sentinel == true %}
+cp $LOG_DIR/${HOSTNAME}-sentinel.log ${SPLIT_LOG_DIR}/${DATE}-${HOSTNAME}-sentinel.log
+{% endif %}
+
+# set the log-file size to 0
+cp -f /dev/null $LOG_DIR/${HOSTNAME}-redis.log
+{% if is_sentinel == true %}
+cp -f /dev/null $LOG_DIR/${HOSTNAME}-sentinel.log
+{% endif %}
+
+# delete errorlog order than 31 days 
+rm `find ${SPLIT_LOG_DIR} -mtime +30`
