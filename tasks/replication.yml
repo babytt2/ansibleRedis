@@ -1,0 +1,40 @@
+- name: "[Redis] Stop redis service for change config"
+  systemd: name={{ redis_daemon_name }} state=stopped
+  when: is_replica == true or (is_replica == false and hostvars[inventory_hostname].ansible_all_ipv4_addresses[0] ==  groups['redis_sentinel'])
+
+# /etc/redis.conf
+- name: "[Redis] Deploy Redis conf"
+  template: src=redis_{{ redis_version }}_repl.conf.j2 dest={{ redis_conf_path }}/redis.conf backup=yes owner={{ linux_user }} group={{ linux_user }} mode=0640
+  when: is_replica == true
+
+# /etc/redis.conf
+- name: "[Redis] Deploy Sentinel conf"
+  template: src=sentinel_{{ redis_version }}.conf.j2 dest={{ redis_conf_path }}/sentinel.conf backup=yes owner={{ linux_user }} group={{ linux_user }} mode=0640
+  when: is_sentinel == true
+
+# systemctl
+- name: "[Redis] Add systemd configuration if present"
+  template: src=sentinel.service.j2 dest=/lib/systemd/system/sentinel.service owner=root group=root mode=0640
+  when: is_sentinel == true
+
+- name: "[Redis] Add symlink from systemd"
+  file: src=/lib/systemd/system/sentinel.service dest=/etc/systemd/system/multi-user.target.wants/sentinel.service state=link
+  notify: reload systemd
+  when: is_sentinel == true
+
+#reload systemd
+- name: reload systemd
+  systemd:
+    name: "{{ sentinel_daemon_name }}"
+    daemon-reload: yes
+    enabled: yes
+  when: is_sentinel == true
+
+# restart redis/sentinel
+- name: "[Redis] redis systemd restart"
+  systemd: name={{ redis_daemon_name }} state=restarted
+  when: is_replica == true
+
+- name: "[Redis] sentinel"
+  systemd: name={{ sentinel_daemon_name }} state=restarted
+  when: is_sentinel == true
