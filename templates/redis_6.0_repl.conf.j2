@@ -1,0 +1,208 @@
+{{ ansible_managed | comment }}
+
+# Redis 6.0 configuration
+
+################################## INCLUDES ###################################
+# Notice option "include" won't be rewritten by command "CONFIG REWRITE"
+# include                               /path/to/local.conf
+# include                               /path/to/other.conf
+
+################################## MODULES #####################################
+# Load modules at startup.
+# loadmodule                            /path/to/my_module.so
+# loadmodule                            /path/to/other_module.so
+
+################################## NETWORK ##################################
+bind                                    0.0.0.0
+protected-mode                          yes
+port                                    {{ redis_conf_port }}
+tcp-backlog                             {{ redis_conf_tcp_backlog }}
+unixsocket                              {{ redis_conf_unixsocket }}
+unixsocketperm                          700
+timeout                                 {{ redis_conf_timeout }}
+tcp-keepalive                           {{ redis_conf_tcp_keepalive }}
+
+################################## GENERAL ##################################
+daemonize                               yes
+supervised                              systemd
+pidfile                                 {{ redis_conf_pidfile }}
+loglevel                                {{ redis_conf_loglevel }}
+logfile                                 {{ redis_log_path }}/{{ ansible_fqdn }}-redis.log
+databases                               {{ redis_conf_databases }}
+always-show-logo                        yes
+
+################################## SNAPSHOTTING ##################################
+{% for redis_conf_save in redis_conf_save %}
+save                                    {{ redis_conf_save }}
+{% endfor %}
+
+stop-writes-on-bgsave-error             no
+rdbcompression                          yes
+rdbchecksum                             yes
+dbfilename                              {{ ansible_fqdn }}.rdb
+dir                                     {{ redis_data_path }}
+rdb-save-incremental-fsync              yes
+
+################################## REPLICATION ##################################
+{% if redis_conf_replicaof %}
+replicaof {{ redis_conf_replicaof }} {{ redis_conf_port }}
+{% endif %}
+{% if redis_conf_requirepass %}
+masterauth {{ redis_conf_requirepass }}
+{% endif %}
+
+#repl-backlog-size                      1mb
+replica-serve-stale-data                yes
+replica-read-only                       yes
+repl-diskless-sync                      no
+repl-diskless-sync-delay                5
+
+# repl-ping-replica-period              10
+# repl-timeout                          60
+
+repl-disable-tcp-nodelay                no
+
+# repl-backlog-size                     1mb
+# repl-backlog-ttl                      3600
+
+replica-priority                        {{ redis_conf_replica_priority }}
+
+# min-replicas-to-write 3
+# min-replicas-max-lag 10
+# replica-announce-ip 5.5.5.5
+# replica-announce-port 1234
+
+
+
+{% if redis_conf_requirepass %}
+################################## SECURITY ###################################
+
+requirepass                             {{ redis_conf_requirepass }}
+# rename-command CONFIG                 ""
+{% endif %}
+
+################################## CLIENTS ##################################
+{% if ansible_memtotal_mb >= 206158430208 %}
+maxclients                              100000
+{% elif ansible_memtotal_mb >= 171798691840 %}
+maxclients                              80000
+{% elif ansible_memtotal_mb >= 137438953472 %}
+maxclients                              60000
+{% elif ansible_memtotal_mb >= 103079215104 %}
+maxclients                              40000
+{% elif ansible_memtotal_mb >= 68718476736 %}
+maxclients                              20000
+{% elif ansible_memtotal_mb >= 34359738368 %}
+maxclients                              10000
+{% elif ansible_memtotal_mb >= 17179869184 %}
+maxclients                              5000
+{% elif ansible_memtotal_mb >= 8589934592 %}
+maxclients                              3000
+{% else %}
+maxclients                              1000
+{% endif %}
+
+################################## MEMORY MANAGEMENT ##################################
+{% if ansible_memtotal_mb >= 196608 %}
+maxmemory                              {{ ((ansible_memtotal_mb * 1024 * 1024 / 100 * 70 )/1024/1024/1024)|int }}gb
+{% elif ansible_memtotal_mb >= 159744 %}
+maxmemory                              {{ ((ansible_memtotal_mb * 1024 * 1024 / 100 * 70 )/1024/1024/1024)|int }}gb
+{% elif ansible_memtotal_mb >= 131072 %}
+maxmemory                              {{ ((ansible_memtotal_mb * 1024 * 1024 / 100 * 70 )/1024/1024/1024)|int }}gb
+{% elif ansible_memtotal_mb >= 94208 %}
+maxmemory                              {{ ((ansible_memtotal_mb * 1024 * 1024 / 100 * 70 )/1024/1024/1024)|int }}gb
+{% elif ansible_memtotal_mb >= 65536 %}
+maxmemory                              {{ ((ansible_memtotal_mb * 1024 * 1024 / 100 * 70 )/1024/1024/1024)|int }}gb
+{% elif ansible_memtotal_mb >= 32768 %}
+maxmemory                              {{ ((ansible_memtotal_mb * 1024 * 1024 / 100 * 70 )/1024/1024/1024)|int }}gb
+{% elif ansible_memtotal_mb >= 16384 %}
+maxmemory                              {{ ((ansible_memtotal_mb * 1024 * 1024 / 100 * 70 )/1024/1024/1024)|int }}gb
+{% elif ansible_memtotal_mb >= 8192 %}
+maxmemory                              {{ ((ansible_memtotal_mb * 1024 * 1024 / 100 * 70 )/1024/1024/1024)|int }}gb
+{% else %}
+maxmemory                             3gb
+{% endif %}
+maxmemory-policy                        volatile-lru
+#maxmemory-samples                      5
+
+################################## LAZY FREEZING ##################################
+lazyfree-lazy-eviction                  yes
+lazyfree-lazy-expire                    yes
+lazyfree-lazy-server-del                yes
+replica-lazy-flush                      yes
+
+################################## APPEND ONLY MODE ##################################
+appendonly                              yes
+appendfilename                          {{ ansible_fqdn }}.aof
+appendfsync                             everysec
+no-appendfsync-on-rewrite               no
+auto-aof-rewrite-percentage             {{ redis_conf_auto_aof_rewrite_percentage }}
+auto-aof-rewrite-min-size               64mb
+aof-load-truncated                      yes
+aof-use-rdb-preamble                    yes
+aof-rewrite-incremental-fsync           yes
+
+################################## LUA SCRIPTING ##################################
+lua-time-limit                          5000
+
+{% if redis_cluster == true %}
+################################## REDIS CLUSTER ##################################
+cluster-enabled                         {{ redis_conf_cluster_enabled }}
+cluster-config-file                     {{ redis_conf_cluster_config_file }}
+cluster-node-timeout                    15000
+cluster-replica-validity-factor         10
+cluster-migration-barrier               1
+cluster-require-full-coverage           yes
+cluster-replica-no-failover             {{ redis_conf_replica_no_failover }}
+{% endif %}
+
+########################## CLUSTER DOCKER/NAT support  ########################
+
+# cluster-announce-ip                   10.1.1.5
+# cluster-announce-port                 6379
+# cluster-announce-bus-port             6380
+
+################################## SLOW LOG ##################################
+slowlog-log-slower-than                 10000
+slowlog-max-len                         128
+
+##################### LATENCY MONITOR #################
+latency-monitor-threshold               0
+
+################### EVENT NOTIFICATION ################
+notify-keyspace-events                  ""
+
+##################### ADVANCED CONFIG #################
+hash-max-ziplist-entries                512
+hash-max-ziplist-value                  64
+list-max-ziplist-entries                512
+list-max-ziplist-value                  64
+list-compress-depth                     0
+set-max-intset-entries                  512
+zset-max-ziplist-entries                128
+zset-max-ziplist-value                  64
+hll-sparse-max-bytes                    3000
+activerehashing                         yes
+
+{% for redis_conf_client_output_buffer_limit_5 in redis_conf_client_output_buffer_limit_5 %}
+client-output-buffer-limit             {{ redis_conf_client_output_buffer_limit_5 }}
+{% endfor %}
+
+# client-query-buffer-limit             1gb
+# proto-max-bulk-len                    512mb
+
+hz                                      10
+dynamic-hz                              yes
+
+# lfu-log-factor                        10
+# lfu-decay-time                        1
+
+########################### ACTIVE DEFRAGMENTATION #######################
+
+# activedefrag                          yes
+# active-defrag-ignore-bytes            100mb
+# active-defrag-threshold-lower         10
+# active-defrag-threshold-upper         100
+# active-defrag-cycle-min               5
+# active-defrag-cycle-max               75
+# active-defrag-max-scan-fields         1000
