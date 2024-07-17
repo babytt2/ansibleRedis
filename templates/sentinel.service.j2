@@ -1,0 +1,13 @@
+[Unit]
+Description={{ linux_user }}-sentienl
+After=network.target
+
+[Service]
+User={{ linux_user }}
+Group={{ linux_user }}
+LimitNOFILE={{ redis_openfiles }}
+LimitNPROC={{ redis_openfiles }}
+ExecStart={{ redis_link_path }}/redis-sentinel {{ redis_conf_path }}/sentinel.conf
+
+[Install]
+WantedBy=multi-user.target
