@@ -1,0 +1,29 @@
+{{ ansible_managed | comment }}
+
+# Example sentinel6.conf
+
+bind {{ sentinel_conf_bind }}
+protected-mode no
+
+port {{ sentinel_conf_port }}
+daemonize no
+pidfile {{ sentinel_conf_pidfile }}
+logfile {{ redis_log_path }}/{{ ansible_fqdn }}-sentinel.log
+
+# sentinel announce-ip <ip>
+# sentinel announce-port <port>
+
+dir {{ redis_data_path }}
+
+{% for master in sentinel_conf_monitor %}
+sentinel monitor {{ master.name }} {{ master.host }} {{ master.port }} {{ master.quorum|d('2') }}
+{% for option in ('auth_pass', 'down_after_miliseconds', 'parallel_syncs', 'failover_timeout', 'notification_script', 'client_reconfig_script') %}
+{% if master[option] is defined and master[option] %}
+sentinel {{ option|replace('_', '-') }} {{ master.name }} {{ master[option] }}
+{% endif %}
+{% endfor %}
+{% endfor %}
+
+
+sentinel deny-scripts-reconfig yes
+# SENTINEL rename-command mymaster CONFIG CONFIG
