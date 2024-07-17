@@ -1,0 +1,17 @@
+- name: Create split_errorlog.sh
+  template:
+    src: split_errorlog.sh.j2
+    dest: "{{ redis_tarfile_extract_path }}/bin/split_errorlog.sh"
+    backup: yes
+    owner: "root"
+    group: "root"
+    mode: 0700
+
+- name: set backup cronjob
+  cron:
+    name: "redis split errorlog"
+    state: present
+    user: root
+    hour: "00"
+    minute: "00"
+    job: "{{ redis_tarfile_extract_path }}/bin/split_errorlog.sh > /dev/null 2>&1"
