@@ -1,0 +1,18 @@
+[Unit]
+Description={{ linux_user }}
+After=network.target
+
+[Service]
+User={{ linux_user }}
+Group={{ linux_user }}
+LimitNOFILE={{ redis_openfiles }}
+LimitNPROC={{ redis_openfiles }}
+ExecStart={{ redis_link_path }}/redis-server {{ redis_conf_path }}/redis.conf
+ExecStop={{ redis_link_path }}/redis-cli -p {{ redis_conf_port }} shutdown
+Restart=on-failure
+Type=forking
+# type option changed from redis 6.x
+#Type=notify
+
+[Install]
+WantedBy=multi-user.target
