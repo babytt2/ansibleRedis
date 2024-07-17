@@ -1,0 +1,3 @@
+redis_conf_cluster_enabled: "yes"
+redis_conf_cluster_config_file: "redis-cluster.conf"
+redis_conf_replica_no_failover: "no"
