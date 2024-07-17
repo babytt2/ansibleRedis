@@ -1,0 +1,40 @@
+# /etc/redis.conf
+- name: "[Redis] Stop redis service for change config"
+  systemd: name={{ redis_daemon_name }} state=stopped
+
+- name: "[Redis] Deploy Redis conf"
+  template: src=redis_{{ redis_version }}_cluster.conf.j2 dest={{ redis_conf_path }}/redis.conf backup=yes owner={{ linux_user }} group={{ linux_user }} mode=0640
+  when: redis_conf_cluster_enabled == "yes"
+
+# restart redis/sentinel
+- name: "[Redis] redis systemd restart"
+  systemd: name={{ redis_daemon_name }} state=restarted
+
+# Execute Cluster create command on the first server of redis_master inventory group
+# Redis Cluster requires at least 3 master nodes.
+- name: "[Redis] Cluster Master Meet"
+  shell: |
+    echo "yes" | /home/redis/redis/src/redis-cli -p {{ redis_conf_port }} --cluster create {% for item in groups['redis_master'] %}{{ hostvars[item].ansible_all_ipv4_addresses[0] }}:{{ redis_conf_port }} {% endfor %}
+#    echo "yes" | /home/redis/redis/src/redis-cli -p {{ redis_conf_port }} --cluster create {% for item in groups['redis_master'] %}{{ hostvars[item].ansible_all_ipv4_addresses|replace("['", "")|replace("']","") }}:{{ redis_conf_port }} {% endfor %}
+#    /home/redis/redis/src/redis-cli  --cluster create {% set port = joiner( ":{{ redis_conf_port }} ") %}{% for item in groups['redis_master'] %}{{ port() }}{{ hostvars[item].ansible_all_ipv4_addresses|replace('[', '')|replace(']','') }}{% endfor %}{{ port() }}
+  when: hostvars[inventory_hostname].ansible_all_ipv4_addresses[0] ==  hostvars[groups['redis_master'][0]].ansible_all_ipv4_addresses[0] #redis_version == "5.0" and
+
+# Execute add-node --cluster-slave command on the first server of redis_master inventory group
+- name: "[Redis] Cluster add-node Replica"
+  shell: |
+    /home/redis/redis/src/redis-cli -p {{ redis_conf_port }} --cluster add-node {{  hostvars[groups['redis_replica'][index]].ansible_all_ipv4_addresses[0] }}:{{ redis_conf_port }} {{ hostvars[groups['redis_master'][index]].ansible_all_ipv4_addresses[0] }}:{{ redis_conf_port }} --cluster-slave
+  loop: "{{ groups['redis_replica'] }}"
+  loop_control:
+    index_var: index
+  when: hostvars[inventory_hostname].ansible_all_ipv4_addresses[0] ==  hostvars[groups['redis_master'][0]].ansible_all_ipv4_addresses[0] #redis_version == "5.0" and
+# when: groups['redis_replica']|intersect(hostvars[inventory_hostname].ansible_all_ipv4_addresses)
+#    /home/redis/redis/src/redis-cli -p {{ redis_conf_port }} --cluster add-node {{ [groups['redis_replica'][index]]|replace( "['","" )|replace( "']","" ) }}:{{ redis_conf_port }} {{ [groups['redis_master'][index]]|replace( "['","" )|replace( "']","" ) }}:{{ redis_conf_port }} --cluster-slave
+
+
+- name: "[Redis] Cluster Info"
+  shell: |
+      /home/redis/redis/src/redis-cli -p {{ redis_conf_port }} cluster nodes
+  register: clusterinfo
+
+# - debug:
+#     msg: "{{ clusterinfo.stdout_lines }}"
