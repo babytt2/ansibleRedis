@@ -1,0 +1,36 @@
+# Verification of Redis service with service_facts (debug with ansible_facts.services["redis.service"].state)
+- name: "[Redis] Check Redis service"
+  service_facts:
+- fail:
+    msg: Redis Already Installed!! Ansible terminates this playbook. ByeBye~!
+  when: ansible_facts.services["redis.service"] is defined
+
+# Run Pretask
+- name: "[Redis] Pretask"
+  include: pretask.yml
+  when: ansible_facts.services["redis.service"] is not defined
+  
+# Install Redis on Debian/Ubuntu
+- name: "[Redis] Include installation tasks"
+  include: "install_{{ ansible_os_family | lower }}.yml"
+  when: '"amazon" not in ansible_bios_version' # ansible_facts.services["redis.service"] is not defined
+
+# Install Redis on AWS Debian/Ubuntu
+- name: "[Redis] Include AWS installation tasks"
+  include: "install_{{ ansible_os_family | lower }}_aws.yml"
+  when: '"amazon" in ansible_bios_version'
+
+# Include Replication, Sentinel Configuration
+- name: "[Redis] Include replication tasks"
+  include: "replication.yml"
+  when: (is_replica == true and redis_conf_replicaof is defined) or (is_sentinel == true and ansible_facts.services["sentiel.service"] is not defined)
+
+# Include Cluster Configuration
+- name: "[Redis] Include Cluster tasks"
+  include: cluster.yml
+  when: redis_cluster == true
+
+# Include Split Errorlog
+- name: "[Redis] Include Split Errorlog tasks"
+  include: split_errorlog.yml
+  tags: [split_errorlog]
