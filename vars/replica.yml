@@ -1,0 +1,16 @@
+# replication Options
+redis_conf_replicaof: ""
+#redis_conf_replicaof: "10.10.10.111 6379"       #masterip masterport
+redis_conf_replica_priority: ""
+
+sentinel_conf_monitor:
+  - name: mymaster
+    host: localhost
+    port: 6379
+    quorum: 2
+    auth_pass: "{{ adnub_pwd }}"
+    down_after_miliseconds: 30000
+    parallel_syncs: 1
+    failover_timeout: 180000
+    notification_script: false
+    client_reconfig_script: false
